@@ -45,12 +45,12 @@ func (c *Client) ListCollections() ([]Collection, error) {
 		return nil, err
 	}
 
-	var listResp ListCollectionsResponse
-	if err := json.Unmarshal(resp.Data, &listResp); err != nil {
+	var collections []Collection
+	if err := json.Unmarshal(resp.Data, &collections); err != nil {
 		return nil, err
 	}
 
-	return listResp.Data, nil
+	return collections, nil
 }
 
 // GetCollectionRequest is the request payload for collections.info
@@ -72,12 +72,12 @@ func (c *Client) GetCollection(id string) (*Collection, error) {
 		return nil, err
 	}
 
-	var collResp GetCollectionResponse
-	if err := json.Unmarshal(resp.Data, &collResp); err != nil {
+	var coll Collection
+	if err := json.Unmarshal(resp.Data, &coll); err != nil {
 		return nil, err
 	}
 
-	return &collResp.Data, nil
+	return &coll, nil
 }
 
 // DocumentNode represents a document in the collection tree
@@ -107,10 +107,10 @@ func (c *Client) GetCollectionDocuments(collectionID string) ([]DocumentNode, er
 		return nil, err
 	}
 
-	var docsResp GetCollectionDocumentsResponse
-	if err := json.Unmarshal(resp.Data, &docsResp); err != nil {
+	var nodes []DocumentNode
+	if err := json.Unmarshal(resp.Data, &nodes); err != nil {
 		return nil, err
 	}
 
-	return docsResp.Data, nil
+	return nodes, nil
 }

@@ -40,12 +40,12 @@ func (c *Client) GetDocument(id string) (*Document, error) {
 		return nil, err
 	}
 
-	var docResp GetDocumentResponse
-	if err := json.Unmarshal(resp.Data, &docResp); err != nil {
+	var doc Document
+	if err := json.Unmarshal(resp.Data, &doc); err != nil {
 		return nil, err
 	}
 
-	return &docResp.Data, nil
+	return &doc, nil
 }
 
 // UpdateDocumentRequest is the request payload for documents.update
@@ -72,12 +72,12 @@ func (c *Client) UpdateDocument(id, text string, revision int) (*Document, error
 		return nil, err
 	}
 
-	var updateResp UpdateDocumentResponse
-	if err := json.Unmarshal(resp.Data, &updateResp); err != nil {
+	var doc Document
+	if err := json.Unmarshal(resp.Data, &doc); err != nil {
 		return nil, err
 	}
 
-	return &updateResp.Data, nil
+	return &doc, nil
 }
 
 // CreateDocumentRequest is the request payload for documents.create
@@ -105,10 +105,10 @@ func (c *Client) CreateDocument(title, text, collectionID string) (*Document, er
 		return nil, err
 	}
 
-	var createResp CreateDocumentResponse
-	if err := json.Unmarshal(resp.Data, &createResp); err != nil {
+	var doc Document
+	if err := json.Unmarshal(resp.Data, &doc); err != nil {
 		return nil, err
 	}
 
-	return &createResp.Data, nil
+	return &doc, nil
 }
