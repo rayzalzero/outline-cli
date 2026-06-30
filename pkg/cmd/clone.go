@@ -48,10 +48,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 		targetDir = "." // Current directory
 	}
 
-	// Get API key
 	apiKey := os.Getenv("OUTLINE_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("OUTLINE_API_KEY not set")
+		apiKey = os.Getenv("OUTLINE_TOKEN")
+	}
+	if apiKey == "" {
+		return fmt.Errorf("OUTLINE_API_KEY or OUTLINE_TOKEN not set")
 	}
 
 	// Get base URL

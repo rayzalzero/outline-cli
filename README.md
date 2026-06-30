@@ -55,6 +55,8 @@ Create an API key at: `https://your-outline.com/settings/api`
 export OUTLINE_API_KEY='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 ```
 
+**Note**: Use API key (`ol_api_...`), not JWT session token. See [AUTHENTICATION.md](AUTHENTICATION.md) for details.
+
 ### 2. Clone a Collection
 
 ```bash
@@ -207,8 +209,12 @@ Create `~/.outline/config` for global settings:
 
 ### Environment Variables
 
-- `OUTLINE_API_KEY` - API token (required)
+- `OUTLINE_API_KEY` - API token (format: `ol_api_...`, required)
+- `OUTLINE_TOKEN` - Alternative to OUTLINE_API_KEY (fallback)
 - `OUTLINE_BASE_URL` - Outline instance URL (default: `https://outline-rbi.jatismobile.com`)
+
+**Important**: Use API key (`ol_api_...`) from Outline settings, not JWT session token. 
+See [AUTHENTICATION.md](AUTHENTICATION.md) for complete authentication guide.
 
 ## How It Works
 

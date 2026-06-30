@@ -6,21 +6,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// Client is the Outline API client
 type Client struct {
 	baseURL    string
-	apiKey     string
+	token      string
+	tokenType  string
 	httpClient *http.Client
 }
 
-// NewClient creates a new Outline API client
-func NewClient(baseURL, apiKey string) *Client {
+func NewClient(baseURL, token string) *Client {
+	tokenType := detectTokenType(token)
 	return &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
+		baseURL:   baseURL,
+		token:     token,
+		tokenType: tokenType,
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
@@ -29,6 +31,16 @@ func NewClient(baseURL, apiKey string) *Client {
 			},
 		},
 	}
+}
+
+func detectTokenType(token string) string {
+	if strings.HasPrefix(token, "ol_api_") {
+		return "api_key"
+	}
+	if strings.Count(token, ".") == 2 {
+		return "jwt"
+	}
+	return "jwt"
 }
 
 // Response is the standard Outline API response
@@ -59,8 +71,7 @@ func (c *Client) post(endpoint string, payload interface{}) (*Response, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
