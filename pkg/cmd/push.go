@@ -73,11 +73,17 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 
 	modified := []string{}
+	newFiles := []string{}
 	
 	for relPath, entry := range m {
 		filePath := filepath.Join(cwd, relPath)
 		
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			continue
+		}
+
+		if entry.ID == "" {
+			newFiles = append(newFiles, relPath)
 			continue
 		}
 
@@ -91,14 +97,25 @@ func runPush(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if len(modified) == 0 {
+	totalChanges := len(modified) + len(newFiles)
+	
+	if totalChanges == 0 {
 		fmt.Println("Nothing to push")
 		return nil
 	}
 
-	fmt.Printf("Modified files: %d\n", len(modified))
-	for _, path := range modified {
-		fmt.Printf("  - %s\n", path)
+	if len(newFiles) > 0 {
+		fmt.Printf("New files: %d\n", len(newFiles))
+		for _, path := range newFiles {
+			fmt.Printf("  + %s\n", path)
+		}
+	}
+	
+	if len(modified) > 0 {
+		fmt.Printf("Modified files: %d\n", len(modified))
+		for _, path := range modified {
+			fmt.Printf("  ~ %s\n", path)
+		}
 	}
 
 	if pushDryRun {
@@ -106,10 +123,24 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	cfg, err := config.Load(cwd)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	collectionID := cfg.CollectionID
+	if collectionID == "" {
+		return fmt.Errorf("no collection ID in config")
+	}
+
 	fmt.Println("\nPushing changes...")
 	
 	pushed := 0
-	for _, relPath := range modified {
+	created := 0
+	
+	allFiles := append(newFiles, modified...)
+	
+	for _, relPath := range allFiles {
 		filePath := filepath.Join(cwd, relPath)
 		entry, _ := m.Get(relPath)
 
@@ -125,30 +156,55 @@ func runPush(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		if frontmatter == nil {
-			fmt.Printf("  ✗ %s (no frontmatter found)\n", relPath)
-			continue
+		docID := ""
+		if frontmatter != nil {
+			docID = frontmatter.OutlineID
 		}
 
-		docID := frontmatter.OutlineID
+		var doc *api.Document
+		
 		if docID == "" {
-			fmt.Printf("  ✗ %s (no outline_id in frontmatter)\n", relPath)
-			continue
-		}
-
-		doc, err := client.UpdateDocument(docID, text, entry.Revision)
-		if err != nil {
-			fmt.Printf("  ✗ %s (API error: %v)\n", relPath, err)
-			continue
+			title := filepath.Base(relPath)
+			title = title[:len(title)-3]
+			
+			doc, err = client.CreateDocument(title, text, collectionID)
+			if err != nil {
+				if contains(err.Error(), "authorization_error") || contains(err.Error(), "403") {
+					fmt.Printf("  ✗ %s (create failed: session token cannot create documents, use API key instead)\n", relPath)
+				} else {
+					fmt.Printf("  ✗ %s (create error: %v)\n", relPath, err)
+				}
+				continue
+			}
+			
+			newContent := fmt.Sprintf("---\noutline_id: %s\noutline_collection: %s\noutline_url: %s\noutline_updated: %s\noutline_revision: %d\n---\n\n%s",
+				doc.ID, collectionID, doc.URL, doc.UpdatedAt.Format("2006-01-02T15:04:05.000Z"), doc.Revision, text)
+			
+			if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+				fmt.Printf("  ✗ %s (write frontmatter error: %v)\n", relPath, err)
+				continue
+			}
+			
+			fmt.Printf("  ✓ %s (created, revision %d)\n", relPath, doc.Revision)
+			created++
+		} else {
+			doc, err = client.UpdateDocument(docID, text, entry.Revision)
+			if err != nil {
+				fmt.Printf("  ✗ %s (update error: %v)\n", relPath, err)
+				continue
+			}
+			
+			fmt.Printf("  ✓ %s (updated, revision %d)\n", relPath, doc.Revision)
 		}
 
 		newHash, _ := manifest.FileHash(filePath)
 		entry.Hash = newHash
+		entry.ID = doc.ID
 		entry.Revision = doc.Revision
 		entry.Updated = doc.UpdatedAt
+		entry.Collection = collectionID
 		m.Set(relPath, entry)
 
-		fmt.Printf("  ✓ %s (revision %d)\n", relPath, doc.Revision)
 		pushed++
 	}
 
@@ -158,6 +214,27 @@ func runPush(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nPushed %d/%d files\n", pushed, len(modified))
+	if created > 0 {
+		fmt.Printf("\nCreated %d new document(s), updated %d\n", created, pushed-created)
+	} else {
+		fmt.Printf("\nPushed %d/%d files\n", pushed, totalChanges)
+	}
+	
 	return nil
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			if s[i+j] != substr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
