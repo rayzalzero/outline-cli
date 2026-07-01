@@ -17,11 +17,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Session tokens can now create documents (via parentDocumentId fallback)
 - HTTP headers match browser behavior (x-api-version, x-editor-version)
 - Authorization error handling with clear user messages
+- **documents.info response parsing** - Fixed nested response structure wrapper
+- **Clone command with session token** - Now works end-to-end (was failing with empty collectionID)
+- GetCollection graceful fallback when session token lacks collections.info permission
 
 ### Changed
 - JWT tokens sent via Cookie header instead of Authorization Bearer
 - Create document strategy: try collectionId first, fallback to parentDocumentId
 - Error messages now distinguish between different auth failure scenarios
+- GetDocument now correctly parses `{data: {document: {...}}}` response structure
 
 ## [0.1.0] - 2026-07-01
 
