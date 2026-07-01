@@ -60,10 +60,13 @@ export OUTLINE_API_KEY='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 ### 2. Clone a Collection
 
 ```bash
-# Option 1: Copy URL from browser (easiest!)
+# Option 1: Copy collection URL from browser (easiest!)
 outline clone https://outline-rbi.jatismobile.com/collection/jns-yY1zI9VRK3 jns-docs
 
-# Option 2: Use collection UUID
+# Option 2: Copy document URL from browser (auto-detects parent collection)
+outline clone https://outline-rbi.jatismobile.com/doc/my-document-abc123 jns-docs
+
+# Option 3: Use collection UUID
 outline clone 2e317a13-b7fa-469f-aef8-27474cf336ed jns-docs
 
 cd jns-docs
@@ -97,15 +100,15 @@ outline init
 ### Clone Collection
 
 ```bash
-# Clone by collection ID or URL
-outline clone <collection-id-or-url> [directory]
+# Clone by collection ID, URL, or document URL
+outline clone <collection-or-document-url> [directory]
 
-# Examples
+# Examples - Collection
 
 # 1. Using collection UUID
 outline clone 2e317a13-b7fa-469f-aef8-27474cf336ed jns-docs
 
-# 2. Using full URL (paste from browser!)
+# 2. Using full collection URL (paste from browser!)
 outline clone https://outline-rbi.jatismobile.com/collection/jns-yY1zI9VRK3 jns-docs
 
 # 3. Using collection path
@@ -114,9 +117,22 @@ outline clone /collection/jns-yY1zI9VRK3 jns-docs
 # 4. Using collection slug
 outline clone jns-yY1zI9VRK3 jns-docs
 
+# Examples - Document (auto-detects parent collection)
+
+# 5. Using document URL (paste from browser!)
+outline clone https://outline-rbi.jatismobile.com/doc/my-document-abc123 jns-docs
+
+# 6. Using document path
+outline clone /doc/my-document-abc123 jns-docs
+
+# 7. Using document slug
+outline clone my-document-abc123 jns-docs
+
 # Clone all accessible collections (coming soon)
 outline clone --all ~/outline-workspace
 ```
+
+**Note**: When you provide a document URL/slug, the tool automatically detects and clones the parent collection containing that document.
 
 ### Check Status
 
