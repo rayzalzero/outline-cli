@@ -1,173 +1,157 @@
 # Authentication Guide
 
-Outline CLI mendukung 2 jenis token authentication:
+## Token Types
 
-## 1. API Key (Recommended) ✅
+Outline CLI supports two types of authentication tokens:
 
-API Key adalah token khusus untuk API access yang dibuat di Outline settings.
+### 1. API Key (Recommended)
 
-### Format
-```
-ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+**Format:** `ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
-### Cara Mendapatkan
-1. Login ke Outline: https://outline-rbi.jatismobile.com
-2. Buka Settings → API: https://outline-rbi.jatismobile.com/settings/api
-3. Klik "Create new token" atau "New API token"
-4. Copy token yang muncul (format: `ol_api_...`)
-5. Export ke environment:
-   ```bash
-   export OUTLINE_API_KEY='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-   # atau
-   export OUTLINE_TOKEN='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-   ```
+**Where to get:**
+1. Login to Outline
+2. Go to Settings → API
+3. Create new API key
+4. Copy the key (starts with `ol_api_`)
 
-### Keuntungan
-- ✅ Khusus untuk API access
-- ✅ Tidak expire (sampai di-revoke manual)
-- ✅ Bisa di-revoke kapan saja
-- ✅ Lebih aman untuk automation
+**Permissions:**
+- ✅ Read documents
+- ✅ Update documents
+- ✅ Create documents (collection-level)
+- ✅ Delete documents
 
-### Usage
+**Usage:**
 ```bash
 export OUTLINE_API_KEY='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-outline clone <collection-id> <directory>
+outline push
 ```
 
----
+### 2. Session Token (JWT)
 
-## 2. JWT Session Token (Limited) ⚠️
+**Format:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx.xxxxx`
 
-JWT token adalah session token dari login web browser.
+**Where to get:**
+1. Login to Outline in browser
+2. Open DevTools → Application → Cookies
+3. Copy `accessToken` cookie value
 
-### Format
-```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Ii...
-```
+**Permissions:**
+- ✅ Read documents
+- ✅ Update documents
+- ⚠️  Create documents (limited - see below)
+- ❌ Delete documents
 
-### Cara Mendapatkan
-1. Login ke Outline via browser
-2. Buka Developer Tools (F12)
-3. Cek localStorage atau cookies untuk token
-4. Copy JWT token
+**Limitation:**
+Session tokens typically cannot create documents at collection root level.
+The CLI automatically works around this by creating documents as children of existing documents.
 
-### Keterbatasan
-- ⚠️ **TIDAK BISA DIPAKAI UNTUK API** - Outline API menolak JWT session token dengan error 403
-- ⚠️ Expire dalam waktu tertentu (biasanya beberapa hari/minggu)
-- ⚠️ Tied to browser session
-- ⚠️ Tidak cocok untuk automation
-
-### Status
-JWT token detection sudah implemented di CLI, tapi **Outline API server menolak JWT token**.
-Kamu tetap harus menggunakan API Key (`ol_api_...`).
-
----
-
-## Environment Variables
-
-CLI mendukung 2 environment variable (priority order):
-
+**Usage:**
 ```bash
-# Priority 1: OUTLINE_API_KEY
-export OUTLINE_API_KEY='ol_api_xxxxxxxx'
-
-# Priority 2: OUTLINE_TOKEN (fallback)
-export OUTLINE_TOKEN='ol_api_xxxxxxxx'
-
-# Base URL (optional, default: https://outline-rbi.jatismobile.com)
-export OUTLINE_BASE_URL='https://outline.example.com'
+export OUTLINE_TOKEN='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx.xxxxx'
+outline push
 ```
 
----
+## How Token Detection Works
 
-## Token Detection
+The CLI automatically detects token type:
 
-CLI automatically detects token type:
+```go
+if strings.HasPrefix(token, "ol_api_") {
+    // API Key → Authorization: Bearer header
+} else {
+    // JWT Session Token → Cookie: accessToken header
+}
+```
 
-| Token Format | Detected As | Works? |
-|--------------|-------------|--------|
-| `ol_api_...` | API Key | ✅ Yes |
-| `eyJ...` (3 dots) | JWT | ❌ No (403 from server) |
+## Create Document Permission Strategy
 
----
+When creating new documents, the CLI uses this fallback strategy:
+
+1. **Try collection-level create** (with `collectionId`)
+   - Works with API keys
+   - Usually fails with session tokens (403 authorization_error)
+
+2. **Fallback to parent document** (with `parentDocumentId`)
+   - Finds existing document in same directory
+   - Or uses any existing document as parent
+   - Works with session tokens ✅
+
+This allows session tokens to create documents by attaching them to existing documents instead of creating at collection root.
+
+## HTTP Headers
+
+### API Key Request
+```http
+POST /api/documents.create
+Authorization: Bearer ol_api_xxxxxxxx
+Content-Type: application/json
+Accept: application/json
+```
+
+### Session Token Request
+```http
+POST /api/documents.create
+Cookie: accessToken=eyJhbGci...
+Content-Type: application/json
+Accept: application/json
+x-api-version: 3
+x-editor-version: 13.0.0
+```
 
 ## Troubleshooting
 
-### Error: "OUTLINE_API_KEY or OUTLINE_TOKEN not set"
-**Solution**: Export environment variable
+### Error: "authorization_error" on push
+
+**Cause:** Session token lacks permission to create documents at collection root.
+
+**Solution:** CLI automatically falls back to `parentDocumentId`. No action needed.
+
+### Error: "no permission to create documents in this collection"
+
+**Cause:** Both `collectionId` and `parentDocumentId` strategies failed.
+
+**Solutions:**
+1. Use API key instead: `export OUTLINE_API_KEY='ol_api_...'`
+2. Check user permissions in Outline settings
+3. Ensure at least one document exists in the collection (for parent fallback)
+
+### Session token expired
+
+**Symptoms:** 403 errors on all requests
+
+**Solution:** Get fresh session token from browser:
+1. Logout and login again in browser
+2. Copy new `accessToken` from DevTools → Cookies
+3. Update `OUTLINE_TOKEN` environment variable
+
+## Security Notes
+
+- Never commit tokens to git
+- Use environment variables or config files with `.gitignore`
+- API keys have broader permissions - use session tokens for temporary access
+- Session tokens expire (typically 30 days)
+- API keys don't expire unless revoked
+
+## Examples
+
+### Using API Key (full permissions)
 ```bash
-export OUTLINE_API_KEY='ol_api_xxxxxxxx'
+export OUTLINE_API_KEY='ol_api_xxxxx'
+outline clone <collection-id> docs
+cd docs
+echo "# New Doc" > new.md
+outline add new.md
+outline push  # ✅ Creates at collection root
 ```
 
-### Error: "HTTP 403: authorization_error"
-**Possible causes**:
-1. ❌ Using JWT session token instead of API key
-2. ❌ API key expired or revoked
-3. ❌ Wrong API key
-
-**Solution**: Generate new API key dari Outline settings
-
-### Error: "dial tcp: lookup outline-rbi.jatismobile.com: no such host"
-**Possible causes**:
-1. DNS resolution issue
-2. Network connectivity problem
-
-**Solution**: 
+### Using Session Token (limited permissions)
 ```bash
-# Test connectivity
-ping outline-rbi.jatismobile.com
-curl -I https://outline-rbi.jatismobile.com
-
-# Check DNS
-cat /etc/resolv.conf
+export OUTLINE_TOKEN='eyJhbGci...'
+outline clone <collection-id> docs
+cd docs
+echo "# New Doc" > new.md
+outline add new.md
+outline push  # ✅ Creates as child of existing document (auto-fallback)
 ```
 
----
-
-## Security Best Practices
-
-1. **Never commit tokens** to git
-   ```bash
-   # Add to .gitignore
-   echo ".env" >> .gitignore
-   ```
-
-2. **Use environment variables**
-   ```bash
-   # In ~/.bashrc or ~/.zshrc
-   export OUTLINE_API_KEY='ol_api_xxxxxxxx'
-   ```
-
-3. **Rotate tokens regularly**
-   - Create new token
-   - Update environment variable
-   - Revoke old token
-
-4. **Use different tokens** for different environments
-   ```bash
-   # Development
-   export OUTLINE_API_KEY='ol_api_dev_xxxxxxxx'
-   
-   # Production
-   export OUTLINE_API_KEY='ol_api_prod_xxxxxxxx'
-   ```
-
----
-
-## Quick Start
-
-```bash
-# 1. Get API key from Outline settings
-#    https://outline-rbi.jatismobile.com/settings/api
-
-# 2. Export to environment
-export OUTLINE_API_KEY='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-
-# 3. Test connection
-outline clone test-collection-id test-dir
-
-# 4. If it works, add to shell config for persistence
-echo "export OUTLINE_API_KEY='ol_api_xxxxxxxx'" >> ~/.bashrc
-source ~/.bashrc
-```
+Both work! Session token just uses a different strategy under the hood.
