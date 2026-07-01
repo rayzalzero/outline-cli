@@ -258,9 +258,23 @@ func findParentDocumentID(m manifest.Manifest, filePath string) string {
 		return ""
 	}
 	
+	// Look for a document in the parent directory
+	// e.g., for "naufal/test/hld/lld-auth/lld-auth.md" → find "naufal/test/hld/hld.md"
+	parentDir := filepath.Dir(dir)
+	if parentDir == "." || parentDir == "" {
+		return ""
+	}
+	
+	parentBaseName := filepath.Base(parentDir)
+	parentDocPath := filepath.Join(parentDir, parentBaseName+".md")
+	
+	if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
+		return entry.ID
+	}
+	
+	// Fallback: find any document in parent directory
 	for path, entry := range m {
-		entryDir := filepath.Dir(path)
-		if entryDir == dir && entry.ID != "" {
+		if filepath.Dir(path) == parentDir && entry.ID != "" {
 			return entry.ID
 		}
 	}
