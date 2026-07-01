@@ -164,13 +164,18 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Cloning collection %s...\n", collectionID)
 
-	// Fetch collection info
+	// Fetch collection info (optional - session tokens may not have permission)
 	collection, err := client.GetCollection(collectionID)
 	if err != nil {
-		return fmt.Errorf("fetch collection: %w", err)
+		// Session tokens often can't access collections.info - use placeholder
+		fmt.Printf("Note: Could not fetch collection details (session token limitation)\n")
+		collection = &api.Collection{
+			ID:   collectionID,
+			Name: "Collection", // Placeholder - will be updated from documents
+		}
+	} else {
+		fmt.Printf("Collection: %s\n", collection.Name)
 	}
-
-	fmt.Printf("Collection: %s\n", collection.Name)
 
 	// Create .outline directory
 	outlineDir := filepath.Join(cwd, ".outline")

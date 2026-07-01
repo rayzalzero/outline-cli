@@ -40,12 +40,14 @@ func (c *Client) GetDocument(id string) (*Document, error) {
 		return nil, err
 	}
 
-	var doc Document
-	if err := json.Unmarshal(resp.Data, &doc); err != nil {
+	var wrapper struct {
+		Document *Document `json:"document"`
+	}
+	if err := json.Unmarshal(resp.Data, &wrapper); err != nil {
 		return nil, err
 	}
 
-	return &doc, nil
+	return wrapper.Document, nil
 }
 
 // UpdateDocumentRequest is the request payload for documents.update
