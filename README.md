@@ -60,7 +60,10 @@ export OUTLINE_API_KEY='ol_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 ### 2. Clone a Collection
 
 ```bash
-# Clone by collection ID
+# Option 1: Copy URL from browser (easiest!)
+outline clone https://outline-rbi.jatismobile.com/collection/jns-yY1zI9VRK3 jns-docs
+
+# Option 2: Use collection UUID
 outline clone 2e317a13-b7fa-469f-aef8-27474cf336ed jns-docs
 
 cd jns-docs
@@ -94,12 +97,22 @@ outline init
 ### Clone Collection
 
 ```bash
-# Clone by collection ID
-outline clone <collection-id> [directory]
+# Clone by collection ID or URL
+outline clone <collection-id-or-url> [directory]
 
 # Examples
+
+# 1. Using collection UUID
 outline clone 2e317a13-b7fa-469f-aef8-27474cf336ed jns-docs
-outline clone abc123 ~/outline/docs
+
+# 2. Using full URL (paste from browser!)
+outline clone https://outline-rbi.jatismobile.com/collection/jns-yY1zI9VRK3 jns-docs
+
+# 3. Using collection path
+outline clone /collection/jns-yY1zI9VRK3 jns-docs
+
+# 4. Using collection slug
+outline clone jns-yY1zI9VRK3 jns-docs
 
 # Clone all accessible collections (coming soon)
 outline clone --all ~/outline-workspace

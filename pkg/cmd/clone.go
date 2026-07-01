@@ -17,15 +17,22 @@ import (
 )
 
 var cloneCmd = &cobra.Command{
-	Use:   "clone <collection-id> [directory]",
+	Use:   "clone <collection-id-or-url> [directory]",
 	Short: "Clone a collection to a local directory",
 	Long: `Clone an Outline collection to a local directory.
 
 This downloads all documents from the specified collection and sets up
 a local repository for syncing.
 
+You can provide:
+  - Collection UUID: 2e317a13-b7fa-469f-aef8-27474cf336ed
+  - Full URL: https://outline.com/collection/name-2e317a13-b7fa-469f-aef8-27474cf336ed
+  - Collection path: /collection/name-2e317a13-b7fa-469f-aef8-27474cf336ed
+
 Examples:
   outline clone 2e317a13-b7fa-469f-aef8-27474cf336ed jns-docs
+  outline clone https://outline-rbi.jatismobile.com/collection/jns-yY1zI9VRK3 jns-docs
+  outline clone /collection/jns-yY1zI9VRK3 jns-docs
   outline clone --all ~/outline-workspace
 `,
 	Args: cobra.MinimumNArgs(1),
@@ -37,8 +44,37 @@ func init() {
 	cloneCmd.Flags().Bool("all", false, "clone all accessible collections")
 }
 
+func extractCollectionID(input string) string {
+	// If already a UUID, return as-is
+	uuidPattern := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	if uuidPattern.MatchString(input) {
+		return input
+	}
+
+	// Extract slug from URL patterns:
+	// https://outline.com/collection/slug-xyz
+	// /collection/slug-xyz
+	// Returns slug that will be resolved via API
+	patterns := []string{
+		`/collection/([^/]+)$`,  // Extract slug from path
+		`^([a-z0-9-]+)$`,        // Plain slug
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		if matches := re.FindStringSubmatch(input); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
+	return input
+}
+
 func runClone(cmd *cobra.Command, args []string) error {
 	collectionID := args[0]
+	
+	// Extract collection ID from URL if needed
+	collectionID = extractCollectionID(collectionID)
 	
 	// Determine target directory
 	var targetDir string
@@ -64,6 +100,16 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Create API client
 	client := api.NewClient(baseURL, apiKey)
+
+	// Resolve slug to UUID if needed (collections.info accepts both)
+	uuidPattern := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	if !uuidPattern.MatchString(collectionID) {
+		collection, err := client.GetCollection(collectionID)
+		if err != nil {
+			return fmt.Errorf("resolve collection: %w", err)
+		}
+		collectionID = collection.ID
+	}
 
 	// Create target directory
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
