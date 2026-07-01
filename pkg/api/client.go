@@ -71,9 +71,19 @@ func (c *Client) post(endpoint string, payload interface{}) (*Response, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	
+	// JWT tokens work better via Cookie (matches browser behavior)
+	if c.tokenType == "jwt" {
+		req.Header.Set("Cookie", "accessToken="+c.token)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	
+	// Add headers that browser sends (for compatibility)
+	req.Header.Set("x-api-version", "3")
+	req.Header.Set("x-editor-version", "13.0.0")
 
 	// Execute request
 	resp, err := c.httpClient.Do(req)

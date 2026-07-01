@@ -167,10 +167,23 @@ func runPush(cmd *cobra.Command, args []string) error {
 			title := filepath.Base(relPath)
 			title = title[:len(title)-3]
 			
-			doc, err = client.CreateDocument(title, text, collectionID)
+			parentID := findParentDocumentID(m, relPath)
+			
+			if parentID != "" {
+				doc, err = client.CreateDocumentWithParent(title, text, collectionID, parentID)
+			} else {
+				doc, err = client.CreateDocument(title, text, collectionID)
+				if err != nil && (contains(err.Error(), "authorization_error") || contains(err.Error(), "403")) {
+					fallbackParentID := findAnyDocumentID(m)
+					if fallbackParentID != "" {
+						doc, err = client.CreateDocumentWithParent(title, text, collectionID, fallbackParentID)
+					}
+				}
+			}
+			
 			if err != nil {
 				if contains(err.Error(), "authorization_error") || contains(err.Error(), "403") {
-					fmt.Printf("  ✗ %s (create failed: session token cannot create documents, use API key instead)\n", relPath)
+					fmt.Printf("  ✗ %s (create failed: no permission to create documents in this collection)\n", relPath)
 				} else {
 					fmt.Printf("  ✗ %s (create error: %v)\n", relPath, err)
 				}
@@ -237,4 +250,29 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func findParentDocumentID(m manifest.Manifest, filePath string) string {
+	dir := filepath.Dir(filePath)
+	if dir == "." {
+		return ""
+	}
+	
+	for path, entry := range m {
+		entryDir := filepath.Dir(path)
+		if entryDir == dir && entry.ID != "" {
+			return entry.ID
+		}
+	}
+	
+	return ""
+}
+
+func findAnyDocumentID(m manifest.Manifest) string {
+	for _, entry := range m {
+		if entry.ID != "" {
+			return entry.ID
+		}
+	}
+	return ""
 }

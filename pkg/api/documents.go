@@ -82,10 +82,11 @@ func (c *Client) UpdateDocument(id, text string, revision int) (*Document, error
 
 // CreateDocumentRequest is the request payload for documents.create
 type CreateDocumentRequest struct {
-	Title        string `json:"title"`
-	Text         string `json:"text"`
-	CollectionID string `json:"collectionId"`
-	Publish      bool   `json:"publish"`
+	Title            string `json:"title"`
+	Text             string `json:"text,omitempty"`
+	CollectionID     string `json:"collectionId,omitempty"`
+	ParentDocumentID string `json:"parentDocumentId,omitempty"`
+	Publish          bool   `json:"publish"`
 }
 
 // CreateDocumentResponse is the response from documents.create
@@ -95,12 +96,24 @@ type CreateDocumentResponse struct {
 
 // CreateDocument creates a new document
 func (c *Client) CreateDocument(title, text, collectionID string) (*Document, error) {
-	resp, err := c.post("documents.create", CreateDocumentRequest{
-		Title:        title,
-		Text:         text,
-		CollectionID: collectionID,
-		Publish:      true,
-	})
+	return c.CreateDocumentWithParent(title, text, collectionID, "")
+}
+
+// CreateDocumentWithParent creates a new document with optional parent
+func (c *Client) CreateDocumentWithParent(title, text, collectionID, parentDocumentID string) (*Document, error) {
+	req := CreateDocumentRequest{
+		Title:   title,
+		Text:    text,
+		Publish: true,
+	}
+	
+	if parentDocumentID != "" {
+		req.ParentDocumentID = parentDocumentID
+	} else if collectionID != "" {
+		req.CollectionID = collectionID
+	}
+	
+	resp, err := c.post("documents.create", req)
 	if err != nil {
 		return nil, err
 	}
