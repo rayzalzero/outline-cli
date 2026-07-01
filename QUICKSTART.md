@@ -35,6 +35,9 @@ To get JWT token from web UI:
 ## Quick Start
 
 ```bash
+# List all collections to get collection ID
+outline list
+
 # Clone a collection
 outline clone <collection-id> <directory-name>
 
@@ -77,6 +80,7 @@ Your document content here...
 
 | Command | Status | Description |
 |---------|--------|-------------|
+| `outline list` | ✅ Working | List all collections with IDs |
 | `outline init` | ✅ Working | Initialize repository |
 | `outline clone <id> <dir>` | ✅ Working | Clone collection |
 | `outline status` | 🔄 Stub | Show file status |
@@ -85,13 +89,18 @@ Your document content here...
 
 ## Troubleshooting
 
+### "test-0Zs6CX3gQx" is not a valid collection ID
+- Collection ID must be UUID format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+- "test-0Zs6CX3gQx" is a **slug**, not a collection ID
+- Use `outline list` to get the correct UUID
+
 ### Authentication Failed
 - Check token format: `ol_api_*` or `eyJhbGci*`
 - Verify token is not expired (JWT)
 - Ensure environment variable is exported
 
 ### Clone Failed
-- Verify collection ID is correct
+- Use `outline list` to verify collection ID
 - Check network connection
 - Ensure you have access to the collection
 
