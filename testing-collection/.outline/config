@@ -1,0 +1,11 @@
+[remote "origin"]
+	url = http://localhost:3000
+	collection = 54ef41a8-f481-4eb7-8eb4-efd2a7407bf6
+
+[auth]
+	token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjA5OTc0OWNlLWNkNDMtNGJkNy1iOWI5LTEzMGMzMzkzYWFhNiIsImV4cGlyZXNBdCI6IjIwMjYtMTAtMDJUMDg6MzU6MTIuODUxWiIsInR5cGUiOiJzZXNzaW9uIiwic2VydmljZSI6ImVtYWlsIiwiaWF0IjoxNzgyOTgxMzEyfQ.xJmIhZ_yC040t4nW9qg7V44LaSZW4HzupbLsuPw2UFk
+
+[sync]
+	auto_pull = false
+	conflict_strategy = prompt
+	api_delay = 300ms
