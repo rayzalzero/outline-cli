@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Config holds repository configuration
@@ -34,9 +36,15 @@ func Load(repoPath string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 	
+	// Try environment variables first
 	apiKey := os.Getenv("OUTLINE_API_KEY")
 	if apiKey == "" {
 		apiKey = os.Getenv("OUTLINE_TOKEN")
+	}
+	
+	// Fallback: load from ~/.config/jatismobile/.env
+	if apiKey == "" {
+		apiKey = loadFromEnvFile()
 	}
 	
 	cfg := &Config{
@@ -46,7 +54,7 @@ func Load(repoPath string) (*Config, error) {
 	}
 	
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("OUTLINE_API_KEY or OUTLINE_TOKEN not set")
+		return nil, fmt.Errorf("OUTLINE_API_KEY or OUTLINE_TOKEN not set (checked: env vars, ~/.config/jatismobile/.env)")
 	}
 	
 	lines := string(data)
@@ -64,6 +72,41 @@ func Load(repoPath string) (*Config, error) {
 	}
 	
 	return cfg, nil
+}
+
+// loadFromEnvFile loads OUTLINE_TOKEN from ~/.config/jatismobile/.env
+func loadFromEnvFile() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	
+	envPath := filepath.Join(homeDir, ".config", "jatismobile", ".env")
+	file, err := os.Open(envPath)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		
+		// Look for OUTLINE_TOKEN or OUTLINE_API_KEY
+		if strings.HasPrefix(line, "OUTLINE_TOKEN=") {
+			return strings.TrimPrefix(line, "OUTLINE_TOKEN=")
+		}
+		if strings.HasPrefix(line, "OUTLINE_API_KEY=") {
+			return strings.TrimPrefix(line, "OUTLINE_API_KEY=")
+		}
+	}
+	
+	return ""
 }
 
 func splitLines(s string) []string {

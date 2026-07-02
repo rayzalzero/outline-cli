@@ -74,6 +74,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	modified := []string{}
 	newFiles := []string{}
+	parentChanged := []string{}
 	
 	for relPath, entry := range m {
 		filePath := filepath.Join(cwd, relPath)
@@ -95,9 +96,14 @@ func runPush(cmd *cobra.Command, args []string) error {
 		if currentHash != entry.Hash {
 			modified = append(modified, relPath)
 		}
+
+		expectedParentID := findParentDocumentID(m, relPath)
+		if expectedParentID != entry.ParentID {
+			parentChanged = append(parentChanged, relPath)
+		}
 	}
 
-	totalChanges := len(modified) + len(newFiles)
+	totalChanges := len(modified) + len(newFiles) + len(parentChanged)
 	
 	if totalChanges == 0 {
 		fmt.Println("Nothing to push")
@@ -115,6 +121,13 @@ func runPush(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Modified files: %d\n", len(modified))
 		for _, path := range modified {
 			fmt.Printf("  ~ %s\n", path)
+		}
+	}
+
+	if len(parentChanged) > 0 {
+		fmt.Printf("Parent changed (hierarchy moved): %d\n", len(parentChanged))
+		for _, path := range parentChanged {
+			fmt.Printf("  moved: %s\n", path)
 		}
 	}
 
@@ -137,6 +150,31 @@ func runPush(cmd *cobra.Command, args []string) error {
 	
 	pushed := 0
 	created := 0
+	moved := 0
+	
+	for _, relPath := range parentChanged {
+		entry, exists := m.Get(relPath)
+		if !exists || entry.ID == "" {
+			continue
+		}
+
+		expectedParentID := findParentDocumentID(m, relPath)
+		if expectedParentID == entry.ParentID {
+			continue
+		}
+
+		_, err = client.MoveDocument(entry.ID, expectedParentID)
+		if err != nil {
+			fmt.Printf("  ✗ %s (move error: %v)\n", relPath, err)
+			continue
+		}
+
+		entry.ParentID = expectedParentID
+		m[relPath] = entry
+
+		fmt.Printf("  ↔ %s (moved to new parent)\n", relPath)
+		moved++
+	}
 	
 	allFiles := append(newFiles, modified...)
 	
@@ -201,6 +239,16 @@ func runPush(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  ✓ %s (created, revision %d)\n", relPath, doc.Revision)
 			created++
 		} else {
+			expectedParentID := findParentDocumentID(m, relPath)
+			if expectedParentID != entry.ParentID {
+				_, err = client.MoveDocument(docID, expectedParentID)
+				if err != nil {
+					fmt.Printf("  ✗ %s (move error: %v)\n", relPath, err)
+					continue
+				}
+				fmt.Printf("  ↔ %s (moved to new parent)\n", relPath)
+			}
+			
 			doc, err = client.UpdateDocument(docID, text, entry.Revision)
 			if err != nil {
 				fmt.Printf("  ✗ %s (update error: %v)\n", relPath, err)
@@ -216,6 +264,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 		entry.Revision = doc.Revision
 		entry.Updated = doc.UpdatedAt
 		entry.Collection = collectionID
+		entry.ParentID = doc.ParentDocumentID
 		m.Set(relPath, entry)
 
 		pushed++
@@ -255,26 +304,33 @@ func contains(s, substr string) bool {
 func findParentDocumentID(m manifest.Manifest, filePath string) string {
 	dir := filepath.Dir(filePath)
 	if dir == "." {
-		return ""
+		return "" // File is at root level, no parent
 	}
 	
-	// Look for a document in the parent directory
-	// e.g., for "naufal/test/hld/lld-auth/lld-auth.md" → find "naufal/test/hld/hld.md"
-	parentDir := filepath.Dir(dir)
-	if parentDir == "." || parentDir == "" {
-		return ""
-	}
-	
-	parentBaseName := filepath.Base(parentDir)
-	parentDocPath := filepath.Join(parentDir, parentBaseName+".md")
+	// Look for a document matching the folder name
+	// e.g., for "newparent/child1.md" → look for "newparent.md"
+	folderName := filepath.Base(dir)
+	parentDocPath := folderName + ".md"
 	
 	if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
 		return entry.ID
 	}
 	
-	// Fallback: find any document in parent directory
-	for path, entry := range m {
-		if filepath.Dir(path) == parentDir && entry.ID != "" {
+	// If folder is nested, try parent folder's document
+	// e.g., for "parent/subfolder/file.md" → look for "parent/subfolder.md"
+	parentDocPath = dir + ".md"
+	if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
+		return entry.ID
+	}
+	
+	// Fallback: find any document in the same directory as this file's parent folder
+	// e.g., for "a/b/c.md" → find any doc in "a/" directory
+	parentDir := filepath.Dir(dir)
+	if parentDir != "." && parentDir != "" {
+		parentBaseName := filepath.Base(parentDir)
+		parentDocPath := filepath.Join(parentDir, parentBaseName+".md")
+		
+		if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
 			return entry.ID
 		}
 	}

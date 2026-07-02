@@ -51,6 +51,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	modified := []string{}
 	deleted := []string{}
 	untracked := []string{}
+	parentChanged := []string{}
 	tracked := make(map[string]bool)
 
 	for relPath, entry := range m {
@@ -69,6 +70,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 		if currentHash != entry.Hash {
 			modified = append(modified, relPath)
+		}
+
+		expectedParentID := findParentDocumentID(m, relPath)
+		if expectedParentID != entry.ParentID {
+			parentChanged = append(parentChanged, relPath)
 		}
 	}
 
@@ -104,9 +110,17 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scan files: %w", err)
 	}
 
-	if len(modified) == 0 && len(deleted) == 0 && len(untracked) == 0 {
+	if len(modified) == 0 && len(deleted) == 0 && len(untracked) == 0 && len(parentChanged) == 0 {
 		fmt.Println("nothing to commit, working tree clean")
 		return nil
+	}
+
+	if len(parentChanged) > 0 {
+		fmt.Println("Parent changed (hierarchy moved):")
+		for _, path := range parentChanged {
+			fmt.Printf("  moved:      %s\n", path)
+		}
+		fmt.Println()
 	}
 
 	if len(modified) > 0 {

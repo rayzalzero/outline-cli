@@ -16,6 +16,7 @@ type Frontmatter struct {
 	OutlineURL        string    `yaml:"outline_url"`
 	OutlineUpdated    time.Time `yaml:"outline_updated"`
 	OutlineRevision   int       `yaml:"outline_revision"`
+	OutlineParentID   string    `yaml:"outline_parent_id,omitempty"`
 }
 
 // Parse extracts frontmatter and content from markdown

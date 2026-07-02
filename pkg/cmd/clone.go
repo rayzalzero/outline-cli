@@ -244,6 +244,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 			OutlineURL:        doc.URL,
 			OutlineUpdated:    doc.UpdatedAt,
 			OutlineRevision:   doc.Revision,
+			OutlineParentID:   doc.ParentDocumentID,
 		}
 
 		// Serialize markdown with frontmatter
@@ -267,6 +268,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 			Hash:       hash,
 			Updated:    doc.UpdatedAt,
 			Collection: collection.Name,
+			ParentID:   doc.ParentDocumentID,
 		})
 
 		totalDocs++

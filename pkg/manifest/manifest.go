@@ -13,6 +13,7 @@ type Entry struct {
 	Hash       string    `json:"hash"`
 	Updated    time.Time `json:"updated"`
 	Collection string    `json:"collection"`
+	ParentID   string    `json:"parentId,omitempty"`
 }
 
 // Manifest tracks sync state for all documents

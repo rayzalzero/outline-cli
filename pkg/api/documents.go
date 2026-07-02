@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"time"
 )
 
@@ -115,7 +116,37 @@ func (c *Client) CreateDocumentWithParent(title, text, collectionID, parentDocum
 		req.CollectionID = collectionID
 	}
 	
+	log.Printf("[DEBUG] CreateDocument: title=%s, textLen=%d, collectionID=%s, parentID=%s", 
+		title, len(text), collectionID, parentDocumentID)
+	
 	resp, err := c.post("documents.create", req)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc Document
+	if err := json.Unmarshal(resp.Data, &doc); err != nil {
+		return nil, err
+	}
+	
+	log.Printf("[DEBUG] CreateDocument response: id=%s, title=%s, textLen=%d", 
+		doc.ID, doc.Title, len(doc.Text))
+
+	return &doc, nil
+}
+
+// MoveDocumentRequest is the request payload for documents.move
+type MoveDocumentRequest struct {
+	ID             string `json:"id"`
+	ParentDocumentID string `json:"parentDocumentId,omitempty"`
+}
+
+// MoveDocument moves a document to a new parent (or root if parentID is empty)
+func (c *Client) MoveDocument(id, parentID string) (*Document, error) {
+	resp, err := c.post("documents.move", MoveDocumentRequest{
+		ID:             id,
+		ParentDocumentID: parentID,
+	})
 	if err != nil {
 		return nil, err
 	}
