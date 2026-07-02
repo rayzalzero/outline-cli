@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/rayzalzero/outline-cli/pkg/api"
 	"github.com/rayzalzero/outline-cli/pkg/config"
@@ -177,6 +179,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 	
 	allFiles := append(newFiles, modified...)
+	sortFilesForPush(allFiles)
 	
 	for _, relPath := range allFiles {
 		filePath := filepath.Join(cwd, relPath)
@@ -199,26 +202,25 @@ func runPush(cmd *cobra.Command, args []string) error {
 			docID = frontmatter.OutlineID
 		}
 
-		var doc *api.Document
+	var doc *api.Document
+	
+	if docID == "" {
+		title := getTitleFromFile(relPath, text)
 		
-		if docID == "" {
-			title := filepath.Base(relPath)
-			title = title[:len(title)-3]
-			
-			parentID := findParentDocumentID(m, relPath)
-			
-			if parentID != "" {
-				doc, err = client.CreateDocumentWithParent(title, text, collectionID, parentID)
-			} else {
-				doc, err = client.CreateDocument(title, text, collectionID)
-				if err != nil && (contains(err.Error(), "authorization_error") || contains(err.Error(), "403")) {
-					fallbackParentID := findAnyDocumentID(m)
-					if fallbackParentID != "" {
-						doc, err = client.CreateDocumentWithParent(title, text, collectionID, fallbackParentID)
-					}
+		parentID := findParentDocumentID(m, relPath)
+		
+		if parentID != "" {
+			doc, err = client.CreateDocumentWithParent(title, text, collectionID, parentID)
+		} else {
+			doc, err = client.CreateDocument(title, text, collectionID)
+			if err != nil && (contains(err.Error(), "authorization_error") || contains(err.Error(), "403")) {
+				fallbackParentID := findAnyDocumentID(m)
+				if fallbackParentID != "" {
+					doc, err = client.CreateDocumentWithParent(title, text, collectionID, fallbackParentID)
 				}
 			}
-			
+		}
+		
 			if err != nil {
 				if contains(err.Error(), "authorization_error") || contains(err.Error(), "403") {
 					fmt.Printf("  ✗ %s (create failed: no permission to create documents in this collection)\n", relPath)
@@ -236,27 +238,29 @@ func runPush(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			
-			fmt.Printf("  ✓ %s (created, revision %d)\n", relPath, doc.Revision)
-			created++
-		} else {
-			expectedParentID := findParentDocumentID(m, relPath)
-			if expectedParentID != entry.ParentID {
-				_, err = client.MoveDocument(docID, expectedParentID)
-				if err != nil {
-					fmt.Printf("  ✗ %s (move error: %v)\n", relPath, err)
-					continue
-				}
-				fmt.Printf("  ↔ %s (moved to new parent)\n", relPath)
-			}
-			
-			doc, err = client.UpdateDocument(docID, text, entry.Revision)
+		fmt.Printf("  ✓ %s (created, revision %d)\n", relPath, doc.Revision)
+		created++
+	} else {
+		expectedParentID := findParentDocumentID(m, relPath)
+		if expectedParentID != entry.ParentID {
+			_, err = client.MoveDocument(docID, expectedParentID)
 			if err != nil {
-				fmt.Printf("  ✗ %s (update error: %v)\n", relPath, err)
+				fmt.Printf("  ✗ %s (move error: %v)\n", relPath, err)
 				continue
-			}
-			
-			fmt.Printf("  ✓ %s (updated, revision %d)\n", relPath, doc.Revision)
 		}
+		fmt.Printf("  ↔ %s (moved to new parent)\n", relPath)
+	}
+	
+	title := getTitleFromFile(relPath, text)
+	
+	doc, err = client.UpdateDocument(docID, text, title, entry.Revision)
+	if err != nil {
+		fmt.Printf("  ✗ %s (update error: %v)\n", relPath, err)
+		continue
+	}
+		
+		fmt.Printf("  ✓ %s (updated, revision %d)\n", relPath, doc.Revision)
+	}
 
 		newHash, _ := manifest.FileHash(filePath)
 		entry.Hash = newHash
@@ -304,35 +308,27 @@ func contains(s, substr string) bool {
 func findParentDocumentID(m manifest.Manifest, filePath string) string {
 	dir := filepath.Dir(filePath)
 	if dir == "." {
-		return "" // File is at root level, no parent
+		return ""
 	}
 	
-	// Look for a document matching the folder name
-	// e.g., for "newparent/child1.md" → look for "newparent.md"
+	fileName := filepath.Base(filePath)
 	folderName := filepath.Base(dir)
-	parentDocPath := folderName + ".md"
 	
-	if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
-		return entry.ID
-	}
-	
-	// If folder is nested, try parent folder's document
-	// e.g., for "parent/subfolder/file.md" → look for "parent/subfolder.md"
-	parentDocPath = dir + ".md"
-	if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
-		return entry.ID
-	}
-	
-	// Fallback: find any document in the same directory as this file's parent folder
-	// e.g., for "a/b/c.md" → find any doc in "a/" directory
-	parentDir := filepath.Dir(dir)
-	if parentDir != "." && parentDir != "" {
-		parentBaseName := filepath.Base(parentDir)
-		parentDocPath := filepath.Join(parentDir, parentBaseName+".md")
-		
-		if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
-			return entry.ID
+	if fileName == folderName+".md" {
+		parentDir := filepath.Dir(dir)
+		if parentDir != "." && parentDir != "" {
+			parentFolderName := filepath.Base(parentDir)
+			parentDocPath := filepath.Join(parentDir, parentFolderName+".md")
+			if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
+				return entry.ID
+			}
 		}
+		return ""
+	}
+	
+	parentDocPath := filepath.Join(dir, folderName+".md")
+	if entry, exists := m.Get(parentDocPath); exists && entry.ID != "" {
+		return entry.ID
 	}
 	
 	return ""
@@ -342,6 +338,97 @@ func findAnyDocumentID(m manifest.Manifest) string {
 	for _, entry := range m {
 		if entry.ID != "" {
 			return entry.ID
+		}
+	}
+	return ""
+}
+
+func getPushPriority(path string, allFiles []string) int {
+	depth := strings.Count(path, "/")
+	parent := filepath.Dir(path)
+	isIndex := strings.HasSuffix(path, "/index.md") || strings.HasSuffix(path, "/overview.md") || path == "index.md" || path == "overview.md"
+	isFolderIdx := isFolderIndex(path)
+	
+	if depth == 0 {
+		if isIndex {
+			return 10000
+		}
+		return 9000
+	}
+	
+	maxSubfolderDepth := depth
+	for _, f := range allFiles {
+		fParent := filepath.Dir(f)
+		if strings.HasPrefix(fParent, parent+"/") {
+			fDepth := strings.Count(f, "/")
+			if fDepth > maxSubfolderDepth {
+				maxSubfolderDepth = fDepth
+			}
+		}
+	}
+	
+	if maxSubfolderDepth > depth {
+		return maxSubfolderDepth*1000 + 800
+	}
+	
+	if isIndex {
+		return depth*1000 + 900
+	}
+	
+	if isFolderIdx {
+		return depth*1000 + 850
+	}
+	
+	return depth*1000 + 800
+}
+
+func isFolderIndex(path string) bool {
+	dir := filepath.Dir(path)
+	if dir == "." {
+		return false
+	}
+	
+	base := filepath.Base(path)
+	folderName := filepath.Base(dir)
+	
+	return base == folderName+".md"
+}
+
+func sortFilesForPush(files []string) {
+	sort.Slice(files, func(i, j int) bool {
+		a, b := files[i], files[j]
+		
+		aPriority := getPushPriority(a, files)
+		bPriority := getPushPriority(b, files)
+		
+		if aPriority != bPriority {
+			return aPriority < bPriority
+		}
+		
+		return a < b
+	})
+}
+
+func getTitleFromFile(relPath, text string) string {
+	filename := filepath.Base(relPath)
+	
+	if filename == "index.md" || filename == "overview.md" {
+		return "Overview"
+	}
+	
+	title := extractH1FromMarkdown(text)
+	if title == "" {
+		title = filename[:len(filename)-3]
+	}
+	return title
+}
+
+func extractH1FromMarkdown(text string) string {
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimSpace(line[2:])
 		}
 	}
 	return ""

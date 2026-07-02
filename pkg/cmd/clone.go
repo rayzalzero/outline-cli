@@ -218,7 +218,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 		// Fetch full document
 		doc, err := client.GetDocument(node.ID)
 		if err != nil {
-			return fmt.Errorf("fetch document %s: %w", node.ID, err)
+			fmt.Printf("  ⚠ Skipping %s: %v\n", node.ID, err)
+			return nil
+		}
+		if doc == nil {
+			fmt.Printf("  ⚠ Skipping %s: document not found\n", node.ID)
+			return nil
 		}
 
 		// Generate file path

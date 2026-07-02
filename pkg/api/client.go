@@ -14,12 +14,13 @@ type Client struct {
 	baseURL    string
 	token      string
 	tokenType  string
+	csrfToken  string
 	httpClient *http.Client
 }
 
 func NewClient(baseURL, token string) *Client {
 	tokenType := detectTokenType(token)
-	return &Client{
+	client := &Client{
 		baseURL:   baseURL,
 		token:     token,
 		tokenType: tokenType,
@@ -31,6 +32,12 @@ func NewClient(baseURL, token string) *Client {
 			},
 		},
 	}
+	
+	if tokenType == "jwt" {
+		client.fetchCSRFToken()
+	}
+	
+	return client
 }
 
 func detectTokenType(token string) string {
@@ -73,17 +80,7 @@ func (c *Client) post(endpoint string, payload interface{}) (*Response, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	
-	// JWT tokens work better via Cookie (matches browser behavior)
-	if c.tokenType == "jwt" {
-		req.Header.Set("Cookie", "accessToken="+c.token)
-	} else {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-	
-	// Add headers that browser sends (for compatibility)
-	req.Header.Set("x-api-version", "3")
-	req.Header.Set("x-editor-version", "13.0.0")
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	// Execute request
 	resp, err := c.httpClient.Do(req)
@@ -115,4 +112,26 @@ func (c *Client) post(endpoint string, payload interface{}) (*Response, error) {
 	}
 
 	return &apiResp, nil
+}
+
+func (c *Client) fetchCSRFToken() {
+	req, err := http.NewRequest("GET", c.baseURL, nil)
+	if err != nil {
+		return
+	}
+	
+	req.Header.Set("Cookie", "accessToken="+c.token)
+	
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "csrf" {
+			c.csrfToken = cookie.Value
+			break
+		}
+	}
 }

@@ -130,6 +130,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 					entry.Updated = fm.OutlineUpdated
 				}
 			}
+			
+			// Calculate parent_id based on folder structure
+			parentID := findParentDocumentID(m, relPath)
+			entry.ParentID = parentID
 
 			m.Set(relPath, entry)
 			fmt.Printf("add '%s'\n", relPath)
