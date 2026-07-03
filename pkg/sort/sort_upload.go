@@ -14,7 +14,7 @@ func SortPathsForUpload(paths []string) {
 		if aPriority != bPriority {
 			return aPriority < bPriority
 		}
-		return a < b
+		return a > b
 	})
 }
 
