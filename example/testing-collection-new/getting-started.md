@@ -2,8 +2,8 @@
 outline_id: a4b72714-a41e-4110-8544-860712c2a2b2
 outline_collection: Testing
 outline_url: /doc/getting-started-L09CJNFjYx
-outline_updated: 2026-07-03T04:39:42.489Z
-outline_revision: 4
+outline_updated: 2026-07-03T07:03:41.973Z
+outline_revision: 5
 ---
 
 # Getting Started

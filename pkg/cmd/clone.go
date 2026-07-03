@@ -214,8 +214,8 @@ func runClone(cmd *cobra.Command, args []string) error {
 	// Download documents recursively
 	totalDocs := 0
 	docIndex := 0
-	var processNode func(node api.DocumentNode, parentPath string) error
-	processNode = func(node api.DocumentNode, parentPath string) error {
+	var processNode func(node api.DocumentNode, parentPath string, parentDocID string) error
+	processNode = func(node api.DocumentNode, parentPath string, parentDocID string) error {
 		// Fetch full document
 		doc, err := client.GetDocument(node.ID)
 		if err != nil {
@@ -233,18 +233,24 @@ func runClone(cmd *cobra.Command, args []string) error {
 		hasChildren := len(node.Children) > 0
 		
 		if hasChildren {
-			// Document with children: slug/slug.md
 			if parentPath == "" {
 				filePath = filepath.Join(slug, slug+".md")
 			} else {
 				filePath = filepath.Join(parentPath, slug, slug+".md")
 			}
 		} else {
-			// Document without children: slug.md
 			if parentPath == "" {
 				filePath = slug + ".md"
 			} else {
-				filePath = filepath.Join(parentPath, slug+".md")
+				proposedPath := filepath.Join(parentPath, slug+".md")
+				parentFolderName := filepath.Base(parentPath)
+				parentDocPath := filepath.Join(parentPath, parentFolderName+".md")
+				
+				if proposedPath == parentDocPath {
+					filePath = filepath.Join(parentPath, slug+"-doc.md")
+				} else {
+					filePath = proposedPath
+				}
 			}
 		}
 
@@ -286,7 +292,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 			Hash:       hash,
 			Updated:    doc.UpdatedAt,
 			Collection: collection.ID,
-			ParentID:   doc.ParentDocumentID,
+			ParentID:   parentDocID,
 			Index:      docIndex,
 		})
 
@@ -301,7 +307,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 				childParent = filepath.Join(parentPath, slug)
 			}
 			for _, child := range node.Children {
-				if err := processNode(child, childParent); err != nil {
+				if err := processNode(child, childParent, doc.ID); err != nil {
 					return err
 				}
 			}
@@ -312,7 +318,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Process all root documents
 	for _, node := range docTree {
-		if err := processNode(node, ""); err != nil {
+		if err := processNode(node, "", ""); err != nil {
 			return err
 		}
 	}

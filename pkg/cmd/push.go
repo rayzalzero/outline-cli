@@ -129,7 +129,30 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if len(parentChanged) > 0 {
 		fmt.Printf("Parent changed (hierarchy moved): %d\n", len(parentChanged))
 		for _, path := range parentChanged {
-			fmt.Printf("  moved: %s\n", path)
+			entry, _ := m.Get(path)
+			expectedParentID := findParentDocumentID(m, path)
+			
+			oldParent := "root"
+			if entry.ParentID != "" {
+				for p, e := range m {
+					if e.ID == entry.ParentID {
+						oldParent = p
+						break
+					}
+				}
+			}
+			
+			newParent := "root"
+			if expectedParentID != "" {
+				for p, e := range m {
+					if e.ID == expectedParentID {
+						newParent = p
+						break
+					}
+				}
+			}
+			
+			fmt.Printf("  moved: %s (from: %s → to: %s)\n", path, oldParent, newParent)
 		}
 	}
 
