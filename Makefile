@@ -1,4 +1,4 @@
-.PHONY: build build-all install clean test
+.PHONY: build build-all install clean test fmt lint docker-up docker-down docker-logs docker-restart docker-clean
 
 # Build for current platform
 build:
@@ -31,3 +31,19 @@ fmt:
 # Run linter
 lint:
 	go vet ./...
+
+# Docker commands
+docker-up:
+	cd .docker-outline && docker compose up -d
+
+docker-down:
+	cd .docker-outline && docker compose down
+
+docker-logs:
+	cd .docker-outline && docker compose logs -f
+
+docker-restart:
+	cd .docker-outline && docker compose restart outline
+
+docker-clean:
+	cd .docker-outline && docker compose down -v

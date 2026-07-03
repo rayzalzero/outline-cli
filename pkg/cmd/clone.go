@@ -213,21 +213,45 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Download documents recursively
 	totalDocs := 0
-	var processNode func(node api.DocumentNode, parentPath string) error
-	processNode = func(node api.DocumentNode, parentPath string) error {
+	docIndex := 0
+	var processNode func(node api.DocumentNode, parentPath string, parentDocID string) error
+	processNode = func(node api.DocumentNode, parentPath string, parentDocID string) error {
 		// Fetch full document
 		doc, err := client.GetDocument(node.ID)
 		if err != nil {
-			return fmt.Errorf("fetch document %s: %w", node.ID, err)
+			fmt.Printf("  ⚠ Skipping %s: %v\n", node.ID, err)
+			return nil
+		}
+		if doc == nil {
+			fmt.Printf("  ⚠ Skipping %s: document not found\n", node.ID)
+			return nil
 		}
 
 		// Generate file path
 		slug := slugify(doc.Title)
 		var filePath string
-		if parentPath == "" {
-			filePath = slug + ".md"
+		hasChildren := len(node.Children) > 0
+		
+		if hasChildren {
+			if parentPath == "" {
+				filePath = filepath.Join(slug, slug+".md")
+			} else {
+				filePath = filepath.Join(parentPath, slug, slug+".md")
+			}
 		} else {
-			filePath = filepath.Join(parentPath, slug, slug+".md")
+			if parentPath == "" {
+				filePath = slug + ".md"
+			} else {
+				proposedPath := filepath.Join(parentPath, slug+".md")
+				parentFolderName := filepath.Base(parentPath)
+				parentDocPath := filepath.Join(parentPath, parentFolderName+".md")
+				
+				if proposedPath == parentDocPath {
+					filePath = filepath.Join(parentPath, slug+"-doc.md")
+				} else {
+					filePath = proposedPath
+				}
+			}
 		}
 
 		// Create parent directories
@@ -267,10 +291,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 			Revision:   doc.Revision,
 			Hash:       hash,
 			Updated:    doc.UpdatedAt,
-			Collection: collection.Name,
-			ParentID:   doc.ParentDocumentID,
+			Collection: collection.ID,
+			ParentID:   parentDocID,
+			Index:      docIndex,
 		})
 
+		docIndex++
 		totalDocs++
 		fmt.Printf("  [%d] %s\n", totalDocs, filePath)
 
@@ -281,7 +307,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 				childParent = filepath.Join(parentPath, slug)
 			}
 			for _, child := range node.Children {
-				if err := processNode(child, childParent); err != nil {
+				if err := processNode(child, childParent, doc.ID); err != nil {
 					return err
 				}
 			}
@@ -292,7 +318,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Process all root documents
 	for _, node := range docTree {
-		if err := processNode(node, ""); err != nil {
+		if err := processNode(node, "", ""); err != nil {
 			return err
 		}
 	}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/rayzalzero/outline-cli/pkg/config"
 	"github.com/rayzalzero/outline-cli/pkg/manifest"
@@ -44,6 +46,13 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	m, err := manifest.Load(manifestPath)
 	if err != nil {
 		return fmt.Errorf("load manifest: %w", err)
+	}
+
+	maxIndex := 1
+	for _, entry := range m {
+		if entry.Index >= maxIndex {
+			maxIndex = entry.Index + 1
+		}
 	}
 
 	added := 0
@@ -108,7 +117,8 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Add files to manifest
+		sortFilesForAdd(filesToAdd, repoPath)
+		
 		for _, filePath := range filesToAdd {
 			relPath, _ := filepath.Rel(repoPath, filePath)
 
@@ -118,8 +128,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			}
 
 			entry := manifest.Entry{
-				Hash: hash,
+				Hash:  hash,
+				Index: maxIndex,
 			}
+			maxIndex++
 
 			// Try to parse frontmatter to get outline_id if exists
 			data, err := os.ReadFile(filePath)
@@ -130,6 +142,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 					entry.Updated = fm.OutlineUpdated
 				}
 			}
+			
+			// Calculate parent_id based on folder structure
+			parentID := findParentDocumentID(m, relPath)
+			entry.ParentID = parentID
 
 			m.Set(relPath, entry)
 			fmt.Printf("add '%s'\n", relPath)
@@ -146,4 +162,37 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func sortFilesForAdd(files []string, repoPath string) {
+	sort.Slice(files, func(i, j int) bool {
+		relI, _ := filepath.Rel(repoPath, files[i])
+		relJ, _ := filepath.Rel(repoPath, files[j])
+		
+		baseI := filepath.Base(relI)
+		baseJ := filepath.Base(relJ)
+		
+		isRootIndexI := (baseI == "index.md" || baseI == "overview.md") && !strings.Contains(relI, "/")
+		isRootIndexJ := (baseJ == "index.md" || baseJ == "overview.md") && !strings.Contains(relJ, "/")
+		
+		if isRootIndexI != isRootIndexJ {
+			return isRootIndexI
+		}
+		
+		depthI := strings.Count(relI, "/")
+		depthJ := strings.Count(relJ, "/")
+		
+		if depthI != depthJ {
+			return depthI < depthJ
+		}
+		
+		isFolderIdxI := isFolderIndex(relI)
+		isFolderIdxJ := isFolderIndex(relJ)
+		
+		if isFolderIdxI != isFolderIdxJ {
+			return isFolderIdxI
+		}
+		
+		return relI < relJ
+	})
 }

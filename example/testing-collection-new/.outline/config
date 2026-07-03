@@ -1,0 +1,11 @@
+[remote "origin"]
+	url = http://localhost:3000
+	collection = 54ef41a8-f481-4eb7-8eb4-efd2a7407bf6
+
+[auth]
+	token = ${OUTLINE_API_KEY}
+
+[sync]
+	auto_pull = false
+	conflict_strategy = prompt
+	api_delay = 300ms

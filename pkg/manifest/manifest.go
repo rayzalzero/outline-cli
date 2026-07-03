@@ -3,7 +3,10 @@ package manifest
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"time"
+
+	sortpkg "github.com/rayzalzero/outline-cli/pkg/sort"
 )
 
 // Entry represents a single document in the manifest
@@ -14,6 +17,7 @@ type Entry struct {
 	Updated    time.Time `json:"updated"`
 	Collection string    `json:"collection"`
 	ParentID   string    `json:"parentId,omitempty"`
+	Index      int       `json:"index"`
 }
 
 // Manifest tracks sync state for all documents
@@ -37,14 +41,31 @@ func Load(path string) (Manifest, error) {
 	return m, nil
 }
 
-// Save writes manifest to file
+// Save writes manifest to file with sorted keys
 func (m Manifest) Save(path string) error {
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
+	paths := m.Paths()
+	sortpkg.SortPaths(paths)
+	
+	var buf strings.Builder
+	buf.WriteString("{\n")
+	for i, p := range paths {
+		entry := m[p]
+		entryJSON, err := json.MarshalIndent(entry, "  ", "  ")
+		if err != nil {
+			return err
+		}
+		buf.WriteString("  ")
+		buf.WriteString(jsonQuote(p))
+		buf.WriteString(": ")
+		buf.WriteString(string(entryJSON))
+		if i < len(paths)-1 {
+			buf.WriteString(",")
+		}
+		buf.WriteString("\n")
 	}
-
-	return os.WriteFile(path, data, 0644)
+	buf.WriteString("}")
+	
+	return os.WriteFile(path, []byte(buf.String()), 0644)
 }
 
 // Get retrieves an entry by path
@@ -70,4 +91,9 @@ func (m Manifest) Paths() []string {
 		paths = append(paths, path)
 	}
 	return paths
+}
+
+func jsonQuote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

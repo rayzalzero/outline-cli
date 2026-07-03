@@ -36,25 +36,9 @@ func Load(repoPath string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 	
-	// Try environment variables first
-	apiKey := os.Getenv("OUTLINE_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("OUTLINE_TOKEN")
-	}
-	
-	// Fallback: load from ~/.config/jatismobile/.env
-	if apiKey == "" {
-		apiKey = loadFromEnvFile()
-	}
-	
 	cfg := &Config{
-		APIKey: apiKey,
 		ConflictStrategy: "prompt",
 		APIDelay: "300ms",
-	}
-	
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("OUTLINE_API_KEY or OUTLINE_TOKEN not set (checked: env vars, ~/.config/jatismobile/.env)")
 	}
 	
 	lines := string(data)
@@ -68,7 +52,24 @@ func Load(repoPath string) (*Config, error) {
 			cfg.CollectionID = extractValue(line, "collection = ")
 		} else if contains(line, "url = ") {
 			cfg.RemoteURL = extractValue(line, "url = ")
+		} else if contains(line, "token = ") {
+			cfg.APIKey = extractValue(line, "token = ")
 		}
+	}
+	
+	if cfg.APIKey == "" {
+		cfg.APIKey = os.Getenv("OUTLINE_API_KEY")
+		if cfg.APIKey == "" {
+			cfg.APIKey = os.Getenv("OUTLINE_TOKEN")
+		}
+	}
+	
+	if cfg.APIKey == "" {
+		cfg.APIKey = loadFromEnvFile()
+	}
+	
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("OUTLINE_API_KEY or OUTLINE_TOKEN not set (checked: .outline/config, env vars, ~/.config/jatismobile/.env)")
 	}
 	
 	return cfg, nil

@@ -41,14 +41,12 @@ func (c *Client) GetDocument(id string) (*Document, error) {
 		return nil, err
 	}
 
-	var wrapper struct {
-		Document *Document `json:"document"`
-	}
-	if err := json.Unmarshal(resp.Data, &wrapper); err != nil {
+	var doc Document
+	if err := json.Unmarshal(resp.Data, &doc); err != nil {
 		return nil, err
 	}
 
-	return wrapper.Document, nil
+	return &doc, nil
 }
 
 // UpdateDocumentRequest is the request payload for documents.update
@@ -65,12 +63,17 @@ type UpdateDocumentResponse struct {
 }
 
 // UpdateDocument updates document content
-func (c *Client) UpdateDocument(id, text string, revision int) (*Document, error) {
-	resp, err := c.post("documents.update", UpdateDocumentRequest{
+func (c *Client) UpdateDocument(id, text, title string, revision int) (*Document, error) {
+	req := UpdateDocumentRequest{
 		ID:       id,
 		Text:     text,
 		Revision: revision,
-	})
+	}
+	if title != "" {
+		req.Title = title
+	}
+	
+	resp, err := c.post("documents.update", req)
 	if err != nil {
 		return nil, err
 	}
@@ -137,16 +140,34 @@ func (c *Client) CreateDocumentWithParent(title, text, collectionID, parentDocum
 
 // MoveDocumentRequest is the request payload for documents.move
 type MoveDocumentRequest struct {
-	ID             string `json:"id"`
+	ID               string `json:"id"`
+	CollectionID     string `json:"collectionId,omitempty"`
 	ParentDocumentID string `json:"parentDocumentId,omitempty"`
+	Index            int    `json:"index,omitempty"`
 }
 
 // MoveDocument moves a document to a new parent (or root if parentID is empty)
 func (c *Client) MoveDocument(id, parentID string) (*Document, error) {
-	resp, err := c.post("documents.move", MoveDocumentRequest{
-		ID:             id,
+	return c.MoveDocumentWithIndex(id, parentID, "", 0)
+}
+
+func (c *Client) MoveDocumentWithCollection(id, parentID, collectionID string) (*Document, error) {
+	return c.MoveDocumentWithIndex(id, parentID, collectionID, 0)
+}
+
+func (c *Client) MoveDocumentWithIndex(id, parentID, collectionID string, index int) (*Document, error) {
+	req := MoveDocumentRequest{
+		ID:               id,
 		ParentDocumentID: parentID,
-	})
+	}
+	if collectionID != "" {
+		req.CollectionID = collectionID
+	}
+	if index > 0 {
+		req.Index = index
+	}
+	
+	resp, err := c.post("documents.move", req)
 	if err != nil {
 		return nil, err
 	}

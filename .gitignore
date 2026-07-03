@@ -32,3 +32,13 @@ Thumbs.db
 # Temporary test directories
 /tmp/
 *.tmp
+
+# Docker secrets and environment files
+.docker-outline/docker.env
+docker.env
+.env
+*.env.local
+*.env.production
+
+# Docker volumes
+docker-data/
