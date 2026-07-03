@@ -11,6 +11,7 @@ import (
 	"github.com/rayzalzero/outline-cli/pkg/config"
 	"github.com/rayzalzero/outline-cli/pkg/manifest"
 	"github.com/rayzalzero/outline-cli/pkg/markdown"
+	sortpkg "github.com/rayzalzero/outline-cli/pkg/sort"
 	"github.com/spf13/cobra"
 )
 
@@ -308,6 +309,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 
 	if pushed > 0 {
+		m.Reindex()
 		if err := m.Save(manifestPath); err != nil {
 			return fmt.Errorf("save manifest: %w", err)
 		}
@@ -428,7 +430,7 @@ func getPushPriority(path string, allFiles []string) int {
 	depth := strings.Count(path, "/")
 	parent := filepath.Dir(path)
 	isIndex := strings.HasSuffix(path, "/index.md") || strings.HasSuffix(path, "/overview.md") || path == "index.md" || path == "overview.md"
-	isFolderIdx := isFolderIndex(path)
+	isFolderIdx := sortpkg.IsFolderIndex(path)
 	
 	if depth == 0 {
 		if isIndex {
@@ -463,17 +465,6 @@ func getPushPriority(path string, allFiles []string) int {
 	return depth*1000 + 800
 }
 
-func isFolderIndex(path string) bool {
-	dir := filepath.Dir(path)
-	if dir == "." {
-		return false
-	}
-	
-	base := filepath.Base(path)
-	folderName := filepath.Base(dir)
-	
-	return base == folderName+".md"
-}
 
 func sortFilesForPush(files []string, m manifest.Manifest) {
 	sort.Slice(files, func(i, j int) bool {

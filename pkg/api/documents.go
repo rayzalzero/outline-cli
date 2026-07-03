@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"time"
 )
 
@@ -119,9 +118,6 @@ func (c *Client) CreateDocumentWithParent(title, text, collectionID, parentDocum
 		req.CollectionID = collectionID
 	}
 	
-	log.Printf("[DEBUG] CreateDocument: title=%s, textLen=%d, collectionID=%s, parentID=%s", 
-		title, len(text), collectionID, parentDocumentID)
-	
 	resp, err := c.post("documents.create", req)
 	if err != nil {
 		return nil, err
@@ -131,9 +127,6 @@ func (c *Client) CreateDocumentWithParent(title, text, collectionID, parentDocum
 	if err := json.Unmarshal(resp.Data, &doc); err != nil {
 		return nil, err
 	}
-	
-	log.Printf("[DEBUG] CreateDocument response: id=%s, title=%s, textLen=%d", 
-		doc.ID, doc.Title, len(doc.Text))
 
 	return &doc, nil
 }
