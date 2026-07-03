@@ -53,20 +53,20 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("not an outline repository (no .outline directory found)")
 	}
 
-	apiKey := os.Getenv("OUTLINE_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("OUTLINE_TOKEN")
-	}
-	if apiKey == "" {
-		return fmt.Errorf("OUTLINE_API_KEY or OUTLINE_TOKEN not set")
+	cfg, err := config.Load(cwd)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
 
-	baseURL := os.Getenv("OUTLINE_BASE_URL")
+	baseURL := cfg.RemoteURL
 	if baseURL == "" {
-		baseURL = "https://outline-rbi.jatismobile.com"
+		baseURL = os.Getenv("OUTLINE_BASE_URL")
+		if baseURL == "" {
+			baseURL = "https://outline-rbi.jatismobile.com"
+		}
 	}
 
-	client := api.NewClient(baseURL, apiKey)
+	client := api.NewClient(baseURL, cfg.APIKey)
 
 	manifestPath := filepath.Join(cwd, ".outline", "manifest.json")
 	m, err := manifest.Load(manifestPath)
@@ -100,7 +100,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 		}
 
 		expectedParentID := findParentDocumentID(m, relPath)
-		if expectedParentID != entry.ParentID {
+		if entry.ParentID != "" && expectedParentID != entry.ParentID {
 			parentChanged = append(parentChanged, relPath)
 		}
 	}
@@ -136,11 +136,6 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if pushDryRun {
 		fmt.Println("\n(Dry run - no changes made)")
 		return nil
-	}
-
-	cfg, err := config.Load(cwd)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
 	}
 
 	collectionID := cfg.CollectionID
@@ -179,7 +174,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 	
 	allFiles := append(newFiles, modified...)
-	sortFilesForPush(allFiles)
+	sortFilesForPush(allFiles, m)
 	
 	for _, relPath := range allFiles {
 		filePath := filepath.Join(cwd, relPath)
@@ -207,17 +202,11 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if docID == "" {
 		title := getTitleFromFile(relPath, text)
 		
-		parentID := findParentDocumentID(m, relPath)
-		
-		if parentID != "" {
-			doc, err = client.CreateDocumentWithParent(title, text, collectionID, parentID)
-		} else {
-			doc, err = client.CreateDocument(title, text, collectionID)
-			if err != nil && (contains(err.Error(), "authorization_error") || contains(err.Error(), "403")) {
-				fallbackParentID := findAnyDocumentID(m)
-				if fallbackParentID != "" {
-					doc, err = client.CreateDocumentWithParent(title, text, collectionID, fallbackParentID)
-				}
+		doc, err = client.CreateDocument(title, text, collectionID)
+		if err != nil && (contains(err.Error(), "authorization_error") || contains(err.Error(), "403")) {
+			fallbackParentID := findAnyDocumentID(m)
+			if fallbackParentID != "" {
+				doc, err = client.CreateDocumentWithParent(title, text, collectionID, fallbackParentID)
 			}
 		}
 		
@@ -240,6 +229,27 @@ func runPush(cmd *cobra.Command, args []string) error {
 			
 		fmt.Printf("  ✓ %s (created, revision %d)\n", relPath, doc.Revision)
 		created++
+		
+		newHash, _ := manifest.FileHash(filePath)
+		entry.Hash = newHash
+		entry.ID = doc.ID
+		entry.Revision = doc.Revision
+		entry.Updated = doc.UpdatedAt
+		entry.Collection = collectionID
+		entry.ParentID = doc.ParentDocumentID
+		m.Set(relPath, entry)
+		
+		parentID := findParentDocumentID(m, relPath)
+		if parentID != "" {
+			doc, err = client.MoveDocument(doc.ID, parentID)
+			if err != nil {
+				fmt.Printf("  ✗ %s (move to parent error: %v)\n", relPath, err)
+			} else {
+				fmt.Printf("  ↔ %s (moved to parent)\n", relPath)
+				entry.ParentID = doc.ParentDocumentID
+				m.Set(relPath, entry)
+			}
+		}
 	} else {
 		expectedParentID := findParentDocumentID(m, relPath)
 		if expectedParentID != entry.ParentID {
@@ -249,19 +259,16 @@ func runPush(cmd *cobra.Command, args []string) error {
 				continue
 		}
 		fmt.Printf("  ↔ %s (moved to new parent)\n", relPath)
-	}
-	
-	title := getTitleFromFile(relPath, text)
-	
-	doc, err = client.UpdateDocument(docID, text, title, entry.Revision)
-	if err != nil {
-		fmt.Printf("  ✗ %s (update error: %v)\n", relPath, err)
-		continue
-	}
+		}
 		
-		fmt.Printf("  ✓ %s (updated, revision %d)\n", relPath, doc.Revision)
-	}
-
+		title := getTitleFromFile(relPath, text)
+		
+		doc, err = client.UpdateDocument(docID, text, title, entry.Revision)
+		if err != nil {
+			fmt.Printf("  ✗ %s (update error: %v)\n", relPath, err)
+			continue
+		}
+		
 		newHash, _ := manifest.FileHash(filePath)
 		entry.Hash = newHash
 		entry.ID = doc.ID
@@ -270,6 +277,9 @@ func runPush(cmd *cobra.Command, args []string) error {
 		entry.Collection = collectionID
 		entry.ParentID = doc.ParentDocumentID
 		m.Set(relPath, entry)
+			
+		fmt.Printf("  ✓ %s (updated, revision %d)\n", relPath, doc.Revision)
+	}
 
 		pushed++
 	}
@@ -278,6 +288,54 @@ func runPush(cmd *cobra.Command, args []string) error {
 		if err := m.Save(manifestPath); err != nil {
 			return fmt.Errorf("save manifest: %w", err)
 		}
+	}
+	
+	if created > 0 {
+		fmt.Println("\nSorting documents...")
+		
+		var sortFiles []string
+		for _, relPath := range allFiles {
+			entry, exists := m.Get(relPath)
+			if exists && entry.ID != "" {
+				sortFiles = append(sortFiles, relPath)
+			}
+		}
+		
+		sort.Slice(sortFiles, func(i, j int) bool {
+			entryA, _ := m.Get(sortFiles[i])
+			entryB, _ := m.Get(sortFiles[j])
+			return entryA.Index < entryB.Index
+		})
+		
+		sorted := 0
+		for idx, relPath := range sortFiles {
+			entry, _ := m.Get(relPath)
+			
+			index := entry.Index
+			if index == 0 {
+				index = idx
+			}
+			
+			parentID := findParentDocumentID(m, relPath)
+			if parentID == "" {
+				_, err := client.MoveDocumentWithIndex(entry.ID, "", collectionID, index)
+				if err != nil {
+					fmt.Printf("  ✗ %s (sort error: %v)\n", relPath, err)
+				} else {
+					fmt.Printf("  ↕ %s (index: %d)\n", relPath, index)
+					sorted++
+				}
+			} else {
+				_, err := client.MoveDocumentWithIndex(entry.ID, parentID, "", index)
+				if err != nil {
+					fmt.Printf("  ✗ %s (sort error: %v)\n", relPath, err)
+				} else {
+					fmt.Printf("  ↕ %s (index: %d)\n", relPath, index)
+					sorted++
+				}
+			}
+		}
+		fmt.Printf("Sorted %d document(s)\n", sorted)
 	}
 
 	if created > 0 {
@@ -394,9 +452,25 @@ func isFolderIndex(path string) bool {
 	return base == folderName+".md"
 }
 
-func sortFilesForPush(files []string) {
+func sortFilesForPush(files []string, m manifest.Manifest) {
 	sort.Slice(files, func(i, j int) bool {
 		a, b := files[i], files[j]
+		
+		entryA, okA := m.Get(a)
+		entryB, okB := m.Get(b)
+		
+		if okA && okB {
+			if entryA.Index != entryB.Index {
+				return entryA.Index < entryB.Index
+			}
+			
+			aHasParent := entryA.ParentID != ""
+			bHasParent := entryB.ParentID != ""
+			
+			if aHasParent != bHasParent {
+				return !aHasParent
+			}
+		}
 		
 		aPriority := getPushPriority(a, files)
 		bPriority := getPushPriority(b, files)

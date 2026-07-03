@@ -150,16 +150,23 @@ type MoveDocumentRequest struct {
 
 // MoveDocument moves a document to a new parent (or root if parentID is empty)
 func (c *Client) MoveDocument(id, parentID string) (*Document, error) {
-	return c.MoveDocumentWithCollection(id, parentID, "")
+	return c.MoveDocumentWithIndex(id, parentID, "", 0)
 }
 
 func (c *Client) MoveDocumentWithCollection(id, parentID, collectionID string) (*Document, error) {
+	return c.MoveDocumentWithIndex(id, parentID, collectionID, 0)
+}
+
+func (c *Client) MoveDocumentWithIndex(id, parentID, collectionID string, index int) (*Document, error) {
 	req := MoveDocumentRequest{
 		ID:               id,
 		ParentDocumentID: parentID,
 	}
 	if collectionID != "" {
 		req.CollectionID = collectionID
+	}
+	if index > 0 {
+		req.Index = index
 	}
 	
 	resp, err := c.post("documents.move", req)

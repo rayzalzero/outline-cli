@@ -69,7 +69,7 @@ func runResort(cmd *cobra.Command, args []string) error {
 		files = append(files, relPath)
 	}
 
-	sortFilesForPush(files)
+	sortFilesForPush(files, m)
 
 	fmt.Printf("Resorting %d documents...\n\n", len(files))
 

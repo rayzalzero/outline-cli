@@ -213,6 +213,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Download documents recursively
 	totalDocs := 0
+	docIndex := 0
 	var processNode func(node api.DocumentNode, parentPath string) error
 	processNode = func(node api.DocumentNode, parentPath string) error {
 		// Fetch full document
@@ -274,8 +275,10 @@ func runClone(cmd *cobra.Command, args []string) error {
 			Updated:    doc.UpdatedAt,
 			Collection: collection.Name,
 			ParentID:   doc.ParentDocumentID,
+			Index:      docIndex,
 		})
 
+		docIndex++
 		totalDocs++
 		fmt.Printf("  [%d] %s\n", totalDocs, filePath)
 
