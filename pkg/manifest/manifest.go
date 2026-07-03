@@ -44,7 +44,7 @@ func Load(path string) (Manifest, error) {
 // Save writes manifest to file with sorted keys
 func (m Manifest) Save(path string) error {
 	paths := m.Paths()
-	sortpkg.SortPaths(paths)
+	sortpkg.SortPathsForUpload(paths)
 	
 	var buf strings.Builder
 	buf.WriteString("{\n")

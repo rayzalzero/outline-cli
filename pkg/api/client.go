@@ -33,10 +33,6 @@ func NewClient(baseURL, token string) *Client {
 		},
 	}
 	
-	if tokenType == "jwt" {
-		client.fetchCSRFToken()
-	}
-	
 	return client
 }
 

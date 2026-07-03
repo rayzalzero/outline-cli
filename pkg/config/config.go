@@ -51,18 +51,23 @@ func Load(repoPath string) (*Config, error) {
 		if contains(line, "collection = ") {
 			cfg.CollectionID = extractValue(line, "collection = ")
 		} else if contains(line, "url = ") {
-			cfg.RemoteURL = extractValue(line, "url = ")
-		} else if contains(line, "token = ") {
-			cfg.APIKey = extractValue(line, "token = ")
-		}
+		cfg.RemoteURL = extractValue(line, "url = ")
+	} else if contains(line, "token = ") {
+		cfg.APIKey = extractValue(line, "token = ")
 	}
-	
+}
+
+if cfg.APIKey != "" && strings.HasPrefix(cfg.APIKey, "${") && strings.HasSuffix(cfg.APIKey, "}") {
+	envVar := cfg.APIKey[2 : len(cfg.APIKey)-1]
+	cfg.APIKey = os.Getenv(envVar)
+}
+
+if cfg.APIKey == "" {
+	cfg.APIKey = os.Getenv("OUTLINE_API_KEY")
 	if cfg.APIKey == "" {
-		cfg.APIKey = os.Getenv("OUTLINE_API_KEY")
-		if cfg.APIKey == "" {
-			cfg.APIKey = os.Getenv("OUTLINE_TOKEN")
-		}
+		cfg.APIKey = os.Getenv("OUTLINE_TOKEN")
 	}
+}
 	
 	if cfg.APIKey == "" {
 		cfg.APIKey = loadFromEnvFile()

@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/rayzalzero/outline-cli/pkg/config"
 	"github.com/rayzalzero/outline-cli/pkg/manifest"
 	"github.com/rayzalzero/outline-cli/pkg/markdown"
+	sortpkg "github.com/rayzalzero/outline-cli/pkg/sort"
 	"github.com/spf13/cobra"
 )
 
@@ -48,11 +47,17 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load manifest: %w", err)
 	}
 
-	maxIndex := 1
+	maxIndex := 0
 	for _, entry := range m {
-		if entry.Index >= maxIndex {
-			maxIndex = entry.Index + 1
+		if entry.Index > maxIndex {
+			maxIndex = entry.Index
 		}
+	}
+	
+	if maxIndex == 0 {
+		maxIndex = 1
+	} else {
+		maxIndex++
 	}
 
 	added := 0
@@ -154,6 +159,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	if added > 0 {
+		m.Reindex()
 		if err := m.Save(manifestPath); err != nil {
 			return fmt.Errorf("save manifest: %w", err)
 		}
@@ -165,34 +171,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 }
 
 func sortFilesForAdd(files []string, repoPath string) {
-	sort.Slice(files, func(i, j int) bool {
-		relI, _ := filepath.Rel(repoPath, files[i])
-		relJ, _ := filepath.Rel(repoPath, files[j])
-		
-		baseI := filepath.Base(relI)
-		baseJ := filepath.Base(relJ)
-		
-		isRootIndexI := (baseI == "index.md" || baseI == "overview.md") && !strings.Contains(relI, "/")
-		isRootIndexJ := (baseJ == "index.md" || baseJ == "overview.md") && !strings.Contains(relJ, "/")
-		
-		if isRootIndexI != isRootIndexJ {
-			return isRootIndexI
-		}
-		
-		depthI := strings.Count(relI, "/")
-		depthJ := strings.Count(relJ, "/")
-		
-		if depthI != depthJ {
-			return depthI < depthJ
-		}
-		
-		isFolderIdxI := isFolderIndex(relI)
-		isFolderIdxJ := isFolderIndex(relJ)
-		
-		if isFolderIdxI != isFolderIdxJ {
-			return isFolderIdxI
-		}
-		
-		return relI < relJ
-	})
+	relPaths := make([]string, len(files))
+	for i, file := range files {
+		relPaths[i], _ = filepath.Rel(repoPath, file)
+	}
+	
+	sortpkg.SortPathsByPriority(relPaths)
+	
+	for i := range files {
+		files[i] = filepath.Join(repoPath, relPaths[i])
+	}
 }

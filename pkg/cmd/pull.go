@@ -75,8 +75,28 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Fetching updates from Outline...")
 
+	tree, err := client.GetCollectionDocuments(collectionID)
+	if err != nil {
+		return fmt.Errorf("fetch collection tree: %w", err)
+	}
+
+	indexMap := make(map[string]int)
+	currentIndex := 1
+	var traverse func(nodes []api.DocumentNode)
+	traverse = func(nodes []api.DocumentNode) {
+		for _, node := range nodes {
+			indexMap[node.ID] = currentIndex
+			currentIndex++
+			if len(node.Children) > 0 {
+				traverse(node.Children)
+			}
+		}
+	}
+	traverse(tree)
+
 	updated := 0
 	hierarchyMoved := 0
+	indexUpdated := 0
 
 	for relPath, entry := range m {
 		if entry.ID == "" {
@@ -93,8 +113,10 @@ func runPull(cmd *cobra.Command, args []string) error {
 		
 		contentChanged := doc.Revision > entry.Revision
 		parentChanged := doc.ParentDocumentID != entry.ParentID
+		newIndex := indexMap[doc.ID]
+		indexChanged := newIndex > 0 && newIndex != entry.Index
 
-		if !contentChanged && !parentChanged {
+		if !contentChanged && !parentChanged && !indexChanged {
 			continue
 		}
 
@@ -147,8 +169,18 @@ func runPull(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  ✓ %s (updated to revision %d)\n", relPath, doc.Revision)
 			updated++
 		}
+		
+		if indexChanged && !contentChanged {
+			fmt.Printf("  ↕ %s (index: %d → %d)\n", relPath, entry.Index, newIndex)
+			indexUpdated++
+		}
 
 		newHash, _ := manifest.FileHash(filePath)
+		existingEntry := m[relPath]
+		finalIndex := existingEntry.Index
+		if idx, ok := indexMap[doc.ID]; ok {
+			finalIndex = idx
+		}
 		m[relPath] = manifest.Entry{
 			ID:         doc.ID,
 			Revision:   doc.Revision,
@@ -156,6 +188,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 			Updated:    doc.UpdatedAt,
 			Collection: collectionID,
 			ParentID:   doc.ParentDocumentID,
+			Index:      finalIndex,
 		}
 	}
 
@@ -163,7 +196,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save manifest: %w", err)
 	}
 
-	if updated == 0 && hierarchyMoved == 0 {
+	if updated == 0 && hierarchyMoved == 0 && indexUpdated == 0 {
 		fmt.Println("Already up to date")
 		return nil
 	}
@@ -171,6 +204,9 @@ func runPull(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nPulled %d updates", updated)
 	if hierarchyMoved > 0 {
 		fmt.Printf(", %d hierarchy moves", hierarchyMoved)
+	}
+	if indexUpdated > 0 {
+		fmt.Printf(", %d index updates", indexUpdated)
 	}
 	fmt.Println()
 
