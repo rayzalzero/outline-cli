@@ -230,10 +230,22 @@ func runClone(cmd *cobra.Command, args []string) error {
 		// Generate file path
 		slug := slugify(doc.Title)
 		var filePath string
-		if parentPath == "" {
-			filePath = slug + ".md"
+		hasChildren := len(node.Children) > 0
+		
+		if hasChildren {
+			// Document with children: slug/slug.md
+			if parentPath == "" {
+				filePath = filepath.Join(slug, slug+".md")
+			} else {
+				filePath = filepath.Join(parentPath, slug, slug+".md")
+			}
 		} else {
-			filePath = filepath.Join(parentPath, slug, slug+".md")
+			// Document without children: slug.md
+			if parentPath == "" {
+				filePath = slug + ".md"
+			} else {
+				filePath = filepath.Join(parentPath, slug+".md")
+			}
 		}
 
 		// Create parent directories
@@ -273,7 +285,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 			Revision:   doc.Revision,
 			Hash:       hash,
 			Updated:    doc.UpdatedAt,
-			Collection: collection.Name,
+			Collection: collection.ID,
 			ParentID:   doc.ParentDocumentID,
 			Index:      docIndex,
 		})
